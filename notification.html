@@ -5,14 +5,7 @@
     <title>Title</title>
     <script>
     new Notification("Example notification");
-    const button = document.querySelector("button");
-    button.addEventListener("click", () => {
-        Notification.requestPermission().then(perm => {
-            if (perm === "granted") {
-                new Notification("Example notification")
-            }
-        })
-    })
+
 </script>
 </head>
 <body>

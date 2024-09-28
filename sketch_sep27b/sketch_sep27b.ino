@@ -38,7 +38,20 @@ long duration, cm, inches;
 WiFiServer server(80);
 
 //const char index_html[] = "const button = document.querySelector(\"button\");button.addEventListener(\"click\", () => {  Notification.requestPermission().then(perm => {    if (perm === \"granted\") {      const notification = new Notification(\"Example notification\",{        body: \"This is more text\",        data: {hello: \"world\"},        icon: \"Logo Centered.png\",        tag: \"Welcome Message\",      })      notification.addEventListener(\"error\". e => {        alert(\"error\")      })    }  })})";
-const char index_html[] = "new Notification(\"Example notification\");";
+//const char index_html[] = "new Notification(\"Example notification\");";
+const char index_html[] = "<!DOCTYPE html>"
+"<html lang=\"en\">"
+"<head>"
+"    <meta charset=\"UTF-8\">"
+"    <title>Title</title>"
+"    <script>"
+"    new Notification(\"Example notification\");"
+"</script>"
+"</head>"
+"<body>"
+"    <button>Click</button>"
+"</body>"
+"</html>";
 
 void setup() {
   //Initialize serial and wait for port to open:
@@ -90,69 +103,51 @@ void loop() {
 //  inches = (duration / 2) / 74;
 //  Serial.println(inches);
 inches = 20;
+server.write(index_html);
 
-  if (10 < inches < 30) {
-    // listen for incoming clients
-    WiFiClient client = server.available();
-    if (client) {
-      Serial.println("new client");
-      // an HTTP request ends with a blank line
-      boolean currentLineIsBlank = true;
-      while (client.connected()) {
-        if (client.available()) {
-          
-          char c = client.read();
-          Serial.write(c);
-          // if you've gotten to the end of the line (received a newline
-          // character) and the line is blank, the HTTP request has ended,
-          // so you can send a reply
-          if (c == '\n' && currentLineIsBlank) {
-            // send a standard HTTP response header
-            client.println("HTTP/1.1 200 OK");
-            client.println("Content-Type: text/html");
-            client.println("Connection: close");  // the connection will be closed after completion of the response
-//            client.println("Refresh: 5");  // refresh the page automatically every 5 sec
-            client.println();
-            client.println("<!DOCTYPE HTML>");
-            client.println("<html>");
-            client.println("<head><script>");
-            client.println(index_html);
-            client.println("</script></head>");
-            // output the value of each analog input pin
-            for (int analogChannel = 0; analogChannel < 6; analogChannel++) {
-              int sensorReading = analogRead(analogChannel);
-              client.print("analog input ");
-              client.print(analogChannel);
-              client.print(" is ");
-              client.print(sensorReading);
-              client.println("<br />");
-            }
-  
-            client.println(inches);
-
-            client.println("<button>Click</button>");
-//            
-            
-            client.println("</html>");
-            break;
-          }
-          if (c == '\n') {
-            // you're starting a new line
-            currentLineIsBlank = true;
-          } else if (c != '\r') {
-            // you've gotten a character on the current line
-            currentLineIsBlank = false;
-          }
-        }
-      }
-      // give the web browser time to receive the data
-      delay(1);
-  
-      // close the connection:
-      client.stop();
-      Serial.println("client disconnected");
-    }
-  }
+//  if (10 < inches < 30) {
+//    // listen for incoming clients
+//    WiFiClient client = server.available();
+//    if (client) {
+//      Serial.println("new client");
+//      // an HTTP request ends with a blank line
+//      boolean currentLineIsBlank = true;
+//      while (client.connected()) {
+//        if (client.available()) {
+//          
+//          char c = client.read();
+//          Serial.write(c);
+//          // if you've gotten to the end of the line (received a newline
+//          // character) and the line is blank, the HTTP request has ended,
+//          // so you can send a reply
+//          if (c == '\n' && currentLineIsBlank) {
+//            // send a standard HTTP response header
+//            client.println("HTTP/1.1 200 OK");
+//            client.println("Content-Type: text/html");
+//            client.println("Connection: close");  // the connection will be closed after completion of the response
+////            client.println("Refresh: 5");  // refresh the page automatically every 5 sec
+//            client.println();
+////            client.println(index_html);
+//            client.write(index_html);
+//            break;
+//          }
+//          if (c == '\n') {
+//            // you're starting a new line
+//            currentLineIsBlank = true;
+//          } else if (c != '\r') {
+//            // you've gotten a character on the current line
+//            currentLineIsBlank = false;
+//          }
+//        }
+//      }
+//      // give the web browser time to receive the data
+//      delay(1);
+//  
+//      // close the connection:
+//      client.stop();
+//      Serial.println("client disconnected");
+//    }
+//  }
 }
 
 
