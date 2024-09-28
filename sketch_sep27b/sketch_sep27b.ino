@@ -19,7 +19,7 @@
   https://docs.arduino.cc/tutorials/uno-r4-wifi/wifi-examples#wi-fi-web-server
  */
 
-#include "WiFi.h"
+#include "WiFiS3.h"
 
 
 
@@ -31,7 +31,14 @@ int keyIndex = 0;                 // your network key index number (needed only 
 
 int status = WL_IDLE_STATUS;
 
+int trigPin = 2;
+int echoPin = 4;
+long duration, cm, inches;
+
 WiFiServer server(80);
+
+//const char index_html[] = "const button = document.querySelector(\"button\");button.addEventListener(\"click\", () => {  Notification.requestPermission().then(perm => {    if (perm === \"granted\") {      const notification = new Notification(\"Example notification\",{        body: \"This is more text\",        data: {hello: \"world\"},        icon: \"Logo Centered.png\",        tag: \"Welcome Message\",      })      notification.addEventListener(\"error\". e => {        alert(\"error\")      })    }  })})";
+const char index_html[] = "new Notification(\"Example notification\");";
 
 void setup() {
   //Initialize serial and wait for port to open:
@@ -39,6 +46,8 @@ void setup() {
   while (!Serial) {
     ; // wait for serial port to connect. Needed for native USB port only
   }
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
 
 //  // check for the WiFi module:
 //  if (WiFi.status() == WL_NO_MODULE) {
@@ -69,55 +78,80 @@ void setup() {
 
 
 void loop() {
-  // listen for incoming clients
-  WiFiClient client = server.available();
-  if (client) {
-    Serial.println("new client");
-    // an HTTP request ends with a blank line
-    boolean currentLineIsBlank = true;
-    while (client.connected()) {
-      if (client.available()) {
-        char c = client.read();
-        Serial.write(c);
-        // if you've gotten to the end of the line (received a newline
-        // character) and the line is blank, the HTTP request has ended,
-        // so you can send a reply
-        if (c == '\n' && currentLineIsBlank) {
-          // send a standard HTTP response header
-          client.println("HTTP/1.1 200 OK");
-          client.println("Content-Type: text/html");
-          client.println("Connection: close");  // the connection will be closed after completion of the response
-          client.println("Refresh: 5");  // refresh the page automatically every 5 sec
-          client.println();
-          client.println("<!DOCTYPE HTML>");
-          client.println("<html>");
-          // output the value of each analog input pin
-          for (int analogChannel = 0; analogChannel < 6; analogChannel++) {
-            int sensorReading = analogRead(analogChannel);
-            client.print("analog input ");
-            client.print(analogChannel);
-            client.print(" is ");
-            client.print(sensorReading);
-            client.println("<br />");
+//  digitalWrite(trigPin, LOW);
+//  delayMicroseconds(1);
+//  digitalWrite(trigPin, HIGH);
+//  delayMicroseconds(2);
+//  digitalWrite(trigPin, LOW);
+//
+//  pinMode(echoPin, INPUT);
+//  duration = pulseIn(echoPin, HIGH);
+//
+//  inches = (duration / 2) / 74;
+//  Serial.println(inches);
+inches = 20;
+
+  if (10 < inches < 30) {
+    // listen for incoming clients
+    WiFiClient client = server.available();
+    if (client) {
+      Serial.println("new client");
+      // an HTTP request ends with a blank line
+      boolean currentLineIsBlank = true;
+      while (client.connected()) {
+        if (client.available()) {
+          
+          char c = client.read();
+          Serial.write(c);
+          // if you've gotten to the end of the line (received a newline
+          // character) and the line is blank, the HTTP request has ended,
+          // so you can send a reply
+          if (c == '\n' && currentLineIsBlank) {
+            // send a standard HTTP response header
+            client.println("HTTP/1.1 200 OK");
+            client.println("Content-Type: text/html");
+            client.println("Connection: close");  // the connection will be closed after completion of the response
+//            client.println("Refresh: 5");  // refresh the page automatically every 5 sec
+            client.println();
+            client.println("<!DOCTYPE HTML>");
+            client.println("<html>");
+            client.println("<head><script>");
+            client.println(index_html);
+            client.println("</script></head>");
+            // output the value of each analog input pin
+            for (int analogChannel = 0; analogChannel < 6; analogChannel++) {
+              int sensorReading = analogRead(analogChannel);
+              client.print("analog input ");
+              client.print(analogChannel);
+              client.print(" is ");
+              client.print(sensorReading);
+              client.println("<br />");
+            }
+  
+            client.println(inches);
+
+            client.println("<button>Click</button>");
+//            
+            
+            client.println("</html>");
+            break;
           }
-          client.println("</html>");
-          break;
-        }
-        if (c == '\n') {
-          // you're starting a new line
-          currentLineIsBlank = true;
-        } else if (c != '\r') {
-          // you've gotten a character on the current line
-          currentLineIsBlank = false;
+          if (c == '\n') {
+            // you're starting a new line
+            currentLineIsBlank = true;
+          } else if (c != '\r') {
+            // you've gotten a character on the current line
+            currentLineIsBlank = false;
+          }
         }
       }
+      // give the web browser time to receive the data
+      delay(1);
+  
+      // close the connection:
+      client.stop();
+      Serial.println("client disconnected");
     }
-    // give the web browser time to receive the data
-    delay(1);
-
-    // close the connection:
-    client.stop();
-    Serial.println("client disconnected");
   }
 }
 
