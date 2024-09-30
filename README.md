@@ -12,6 +12,8 @@ https://stackoverflow.com/questions/20345155/android-receive-and-send-data-throu
 
 https://developer.android.com/develop/ui/views/notifications
 
+https://www.youtube.com/watch?v=ggbiLxHhsPo
+
 Voir livre biblio : telegram, wifi antenna, twitter
 
 Prototype avec sensor maison
