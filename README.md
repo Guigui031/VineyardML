@@ -12,7 +12,7 @@ https://stackoverflow.com/questions/20345155/android-receive-and-send-data-throu
 
 https://developer.android.com/develop/ui/views/notifications
 
-Voir livre biblio
+Voir livre biblio : telegram, wifi antenna
 
 Prototype avec sensor maison
 
