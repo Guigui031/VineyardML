@@ -21,8 +21,8 @@ long lastTime = millis();
 long timerDelay = 15 * 1000;
 
 // WiFi
-#define WIFI_SSID "genois"
-#define WIFI_PASS "master13"
+#define WIFI_SSID "SM-S921W6681"
+#define WIFI_PASS "qwer1234"
 
 // Telegram bot
 #define BOTtoken "8069531606:AAGbX_1IGLndlqWLSrzhMnUugFq2B06N8nw" // your Bot Token (Get from Botfather)
@@ -34,7 +34,7 @@ UniversalTelegramBot bot(BOTtoken, secured_client);
 
 // real time clock
 const char* ntpServer = "pool.ntp.org";
-const long  gmtOffset_sec = 0;
+const long  gmtOffset_sec = -5 * 60 * 60;
 const int   daylightOffset_sec = 3600;
 int counter = 0;
 
@@ -83,8 +83,8 @@ void loop() {
 
   if ((millis() - lastTime) > timerDelay && inches < 10 && inches > 0) {
     bot.sendMessage(Mychat_id, "Une auto a traversé!", "Markdown");
-    logEvent(counter++);
     lastTime = millis();
+    logEvent(counter++);
   } 
 }
 
@@ -128,14 +128,14 @@ void logEvent(int value) {
 
   // Create header if file doesn't exist
   if (!SD.exists(filename)) {
-    writeFile(SD, filename, "index,distance,time\n"); // CSV header
+    writeFile(SD, filename, "index,distance,time,millis\n"); // CSV header
   }
 
   // Create data line: value,HH:MM:SS\n
   char line[32];
   char timestr[10];
   strftime(timestr, sizeof(timestr), "%H:%M:%S", &timeinfo);
-  snprintf(line, sizeof(line), "%d,%s\n", value, timestr);
+  snprintf(line, sizeof(line), "%d,%d,%s,%d\n", value, inches, timestr, lastTime);
 
   // Append to file
   appendFile(SD, filename, line);
