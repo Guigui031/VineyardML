@@ -1,21 +1,179 @@
-#define HELTEC_POWER_BUTTON
+/**
+ * LoRa Receiver Only - Receives packets and displays data
+ * 
+ * This code only receives data and displays it on screen and serial.
+ * Perfect for a base station that collects data from sensor nodes.
+ */
+
+// Turns the 'PRG' button into the power button, long press is off 
+#define HELTEC_POWER_BUTTON   // must be before "#include <heltec_unofficial.h>"
 #include <Arduino.h>
 #include <heltec_unofficial.h>
 
-void setup() {
-  // Manual display initialization for clone board
-  pinMode(21, OUTPUT);           // Display power
-  digitalWrite(21, HIGH);        // Enable display power
-  delay(100);
+// Frequency in MHz - MUST match transmitter frequency
+#define FREQUENCY           866.3       // for Europe
+// #define FREQUENCY           905.2     // for US
+
+// LoRa parameters - MUST match transmitter settings
+#define BANDWIDTH           250.0       // kHz
+#define SPREADING_FACTOR    9           // 5-12
+
+// Global variables
+String rxdata;
+volatile bool rxFlag = false;
+int packets_received = 0;
+uint64_t last_packet_time = 0;
+float last_rssi = 0;
+float last_snr = 0;
+
+// Can't do Serial or display operations in interrupt, just set flag
+void rx() {
+  rxFlag = true;
+}
+
+void displayReceivedData() {
+  display.clear();
+  display.setFont(ArialMT_Plain_10);
   
-  pinMode(18, OUTPUT);           // Reset pin (also SCL)
-  digitalWrite(18, LOW);         // Reset display
-  delay(10);
-  digitalWrite(18, HIGH);        // Release reset
-  delay(50);
+  // Show packet info
+  display.drawString(0, 0, "Packet #" + String(packets_received));
+  display.drawString(0, 10, "RSSI: " + String(last_rssi, 1) + " dBm");
+  display.drawString(0, 20, "SNR: " + String(last_snr, 1) + " dB");
   
+  // Show received data (truncated for display)
+  String displayData = rxdata;
+  if (displayData.length() > 16) {
+    displayData = displayData.substring(0, 16) + "...";
+  }
+  display.drawString(0, 30, "Data: " + displayData);
+  
+  // Show signal quality indicator
+  String quality = "Poor";
+  if (last_rssi > -80) quality = "Good";
+  if (last_rssi > -60) quality = "Excellent";
+  display.drawString(0, 40, "Signal: " + quality);
+  
+  display.display();
+}
+
+void parseReceivedData(String data) {
+  // Try to parse JSON-formatted data
+  if (data.startsWith("{") && data.endsWith("}")) {
+    Serial.println("--- Parsed JSON Data ---");
+    
+    // Simple JSON parsing (you could use ArduinoJson library for complex data)
+    int idPos = data.indexOf("\"id\":");
+    int batPos = data.indexOf("\"bat\":");
+    int rssiPos = data.indexOf("\"rssi\":");
+    int timePos = data.indexOf("\"time\":");
+    
+    if (idPos != -1) {
+      int start = data.indexOf(":", idPos) + 1;
+      int end = data.indexOf(",", start);
+      if (end == -1) end = data.indexOf("}", start);
+      String id = data.substring(start, end);
+      Serial.println("Transmitter ID: " + id);
+    }
+    
+    if (batPos != -1) {
+      int start = data.indexOf(":", batPos) + 1;
+      int end = data.indexOf(",", start);
+      if (end == -1) end = data.indexOf("}", start);
+      String battery = data.substring(start, end);
+      Serial.println("Battery Voltage: " + battery + "V");
+    }
+    
+    if (timePos != -1) {
+      int start = data.indexOf(":", timePos) + 1;
+      int end = data.indexOf("}", start);
+      String timestamp = data.substring(start, end);
+      Serial.println("Transmitter Uptime: " + timestamp + "s");
+    }
+    
+    Serial.println("--- End Parsed Data ---");
+  }
+  
+  // Try to parse CSV-formatted data
+  else if (data.indexOf(",") != -1) {
+    Serial.println("--- Parsed CSV Data ---");
+    
+    int pos = 0;
+    int field = 0;
+    String fieldNames[] = {"Counter", "Battery", "Sensor1", "Timestamp"};
+    
+    while (pos < data.length() && field < 4) {
+      int nextComma = data.indexOf(",", pos);
+      if (nextComma == -1) nextComma = data.length();
+      
+      String value = data.substring(pos, nextComma);
+      Serial.println(fieldNames[field] + ": " + value);
+      
+      pos = nextComma + 1;
+      field++;
+    }
+    
+    Serial.println("--- End Parsed Data ---");
+  }
+}
+
+void showDetailedStats() {
+  display.clear();
+  display.setFont(ArialMT_Plain_10);
+  
+  display.drawString(0, 0, "=== STATISTICS ===");
+  display.drawString(0, 10, "Total packets: " + String(packets_received));
+  
+  if (last_packet_time > 0) {
+    int minutes_ago = (millis() - last_packet_time) / 60000;
+    int seconds_ago = ((millis() - last_packet_time) % 60000) / 1000;
+    
+    display.drawString(0, 20, "Last RX: " + String(minutes_ago) + "m" + String(seconds_ago) + "s");
+    display.drawString(0, 30, "Last RSSI: " + String(last_rssi, 1));
+    display.drawString(0, 40, "Last SNR: " + String(last_snr, 1));
+  } else {
+    display.drawString(0, 20, "No packets received");
+  }
+  
+  display.display();
+  
+  // Show for 3 seconds then return to normal display
+  delay(3000);
+}
+
+// Optional: Log data to SD card or send to internet
+void logReceivedData(String data) {
+  // Example: Save to SD card with timestamp
+  /*
+  File logFile = SD.open("/received_data.txt", FILE_APPEND);
+  if (logFile) {
+    logFile.print(millis());
+    logFile.print(",");
+    logFile.print(last_rssi);
+    logFile.print(",");
+    logFile.print(last_snr);
+    logFile.print(",");
+    logFile.println(data);
+    logFile.close();
+  }
+  */
+  
+  // Example: Send to web server
+  /*
+  if (WiFi.status() == WL_CONNECTED) {
+    HTTPClient http;
+    http.begin("http://your-server.com/api/data");
+    http.addHeader("Content-Type", "application/json");
+    
+    String jsonPayload = "{\"data\":\"" + data + "\",\"rssi\":" + String(last_rssi) + ",\"snr\":" + String(last_snr) + "}";
+    int httpResponseCode = http.POST(jsonPayload);
+    
+    http.end();
+  }
+  */
+}
+
+void setup() {  
   heltec_setup();
-  Serial.println("Serial works");
   
   // Re-initialize display after heltec_setup
   display.init();
@@ -24,42 +182,114 @@ void setup() {
   display.setTextAlignment(TEXT_ALIGN_LEFT);
   display.setFont(ArialMT_Plain_10);
   
-  // Display test
-  display.drawString(0, 0, "Display works!");
+  // Initialize radio
+  display.drawString(0, 0, "Radio init...");
+  display.display();
   
-  // Radio test
-  display.drawString(0, 10, "Radio ");
-  int state = radio.begin();
-  if (state == RADIOLIB_ERR_NONE) {
-    display.drawString(40, 10, "works");
-  } else {
-    display.drawString(40, 10, "fail: " + String(state));
-  }
+  Serial.println("LoRa Receiver Starting...");
+  RADIOLIB_OR_HALT(radio.begin());
   
-  // Battery test
-  float vbat = heltec_vbat();
-  display.drawString(0, 20, "Vbat: " + String(vbat, 2) + "V");
-  display.drawString(0, 30, "(" + String(heltec_battery_percent(vbat)) + "%)");
+  // Set the callback function for received packets
+  radio.setDio1Action(rx);
   
-  display.display();  // Show everything
+  // Set radio parameters - must match transmitter
+  Serial.printf("Frequency: %.2f MHz\n", FREQUENCY);
+  RADIOLIB_OR_HALT(radio.setFrequency(FREQUENCY));
+  
+  Serial.printf("Bandwidth: %.1f kHz\n", BANDWIDTH);
+  RADIOLIB_OR_HALT(radio.setBandwidth(BANDWIDTH));
+  
+  Serial.printf("Spreading Factor: %i\n", SPREADING_FACTOR);
+  RADIOLIB_OR_HALT(radio.setSpreadingFactor(SPREADING_FACTOR));
+  
+  // Start receiving immediately
+  RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
+  
+  // Display setup complete
+  display.clear();
+  display.drawString(0, 0, "LoRa RX Ready");
+  display.drawString(0, 10, "Freq: " + String(FREQUENCY, 1) + "MHz");
+  display.drawString(0, 20, "SF" + String(SPREADING_FACTOR) + " BW" + String(BANDWIDTH, 0));
+  display.drawString(0, 30, "Listening...");
+  display.drawString(0, 40, "Packets: 0");
+  display.display();
+  
+  Serial.println("Setup complete. Listening for packets...");
 }
 
 void loop() {
   heltec_loop();
   
-  // Button test
+  // If a packet was received, process it
+  if (rxFlag) {
+    rxFlag = false;
+    
+    // Read the received data
+    int state = radio.readData(rxdata);
+    
+    if (state == RADIOLIB_ERR_NONE) {
+      // Successful reception
+      packets_received++;
+      last_packet_time = millis();
+      last_rssi = radio.getRSSI();
+      last_snr = radio.getSNR();
+      
+      // Print to serial
+      Serial.println("=== PACKET RECEIVED ===");
+      Serial.printf("Data: %s\n", rxdata.c_str());
+      Serial.printf("RSSI: %.2f dBm\n", last_rssi);
+      Serial.printf("SNR: %.2f dB\n", last_snr);
+      Serial.printf("Packet #: %d\n", packets_received);
+      Serial.printf("Length: %d bytes\n", rxdata.length());
+      Serial.println();
+      
+      // Process and display the received data
+      displayReceivedData();
+      
+      // Parse JSON data if applicable
+      parseReceivedData(rxdata);
+      
+    } else {
+      // Reception failed
+      Serial.printf("RX failed, code %d\n", state);
+      
+      display.clear();
+      display.drawString(0, 0, "RX Error!");
+      display.drawString(0, 10, "Code: " + String(state));
+      display.display();
+    }
+    
+    // Start receiving again
+    RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
+  }
+  
+  // Update display with status every few seconds
+  static uint64_t last_display_update = 0;
+  if (millis() - last_display_update > 3000) {
+    last_display_update = millis();
+    
+    // If no recent packet, show listening status
+    if (millis() - last_packet_time > 5000) {
+      display.clear();
+      display.drawString(0, 0, "LoRa Receiver");
+      display.drawString(0, 10, "Listening...");
+      display.drawString(0, 20, "Packets: " + String(packets_received));
+      
+      if (last_packet_time > 0) {
+        int seconds_ago = (millis() - last_packet_time) / 1000;
+        display.drawString(0, 30, "Last: " + String(seconds_ago) + "s ago");
+        display.drawString(0, 40, "RSSI: " + String(last_rssi, 1) + "dBm");
+      } else {
+        display.drawString(0, 30, "No packets yet");
+      }
+      
+      display.display();
+    }
+  }
+  
+  // Button press shows detailed stats
   if (button.isSingleClick()) {
-    display.clear();
-    display.drawString(0, 0, "Button works!");
-    display.display();
-    
-    // LED test
-    for (int n = 0; n <= 100; n++) { heltec_led(n); delay(5); }
-    for (int n = 100; n >= 0; n--) { heltec_led(n); delay(5); }
-    
-    display.drawString(0, 10, "LED works!");
-    display.display();
-    
-    delay(2000);  // Show message for 2 seconds
+    showDetailedStats();
   }
 }
+

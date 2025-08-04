@@ -400,6 +400,16 @@ void heltec_setup() {
     hspi->begin(SCK, MISO, MOSI, SS);
   #endif
   #ifndef HELTEC_NO_DISPLAY_INSTANCE
+    // Manual display initialization for clone board
+    pinMode(21, OUTPUT);           // Display power
+    digitalWrite(21, HIGH);        // Enable display power
+    delay(100);
+    
+    pinMode(18, OUTPUT);           // Reset pin (also SCL)
+    digitalWrite(18, LOW);         // Reset display
+    delay(10);
+    digitalWrite(18, HIGH);        // Release reset
+    delay(50);
     heltec_display_power(true);
     display.init();
     display.setContrast(255);
