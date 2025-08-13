@@ -10,10 +10,11 @@
 #include <Arduino.h>
 #include <heltec_unofficial.h>
 #include <WiFi.h>
-#include "FS.h"
-#include "SD.h"
-#include "SPI.h"
-#include "time.h"
+#include <FS.h>
+#include <SD.h>
+#include <SPI.h>
+#include <time.h>
+#include <common.h>
 
 // Pause between transmitted packets in seconds.
 // Set to zero to only transmit when pressing the user button
@@ -33,6 +34,7 @@ long counter = 0;
 uint64_t last_tx = 0;
 uint64_t tx_time;
 uint64_t minimum_pause;
+bool notificationsEnabled = false;
 
 // SD card
 int sck = 18;
@@ -49,22 +51,6 @@ long duration, cm, inches;
 long lastEventTime = millis();
 long timerDelay = 15 * 1000;
 bool carPresent = false;
-
-// WiFi
-#define WIFI_SSID "SM-S921W6681"
-#define WIFI_PASS "qwer1234"
-
-// Telegram bot
-#define BOTtoken "8069531606:AAGbX_1IGLndlqWLSrzhMnUugFq2B06N8nw" // your Bot Token (Get from Botfather)
-String Mychat_id = "7727548064";
-String bot_name = "AuxVoletsNoirs_notifications"; // you can change this to whichever is your bot name
-
-WiFiClientSecure secured_client;
-UniversalTelegramBot bot(BOTtoken, secured_client);
-
-const unsigned long BOT_MTBS = 1000; // mean time between scan messages
-unsigned long bot_lasttime; // last time messages' scan has been done
-bool notificationsEnabled = true;
 
 // real time clock
 const char* ntpServer = "pool.ntp.org";
@@ -110,108 +96,6 @@ String createDataPacket() {
   packet += String(millis()/1000);
   return packet;
   */
-}
-
-void measureData(int log_counter, bool from_command) {
-  lightValue = analogRead(ldrPin); // Range: 0 (dark) to 1023 (bright)
-  Serial.print("Light level: ");
-  Serial.println(lightValue);
-  logLightValue(log_counter, from_command);
-}
-
-void connectSDCardModule() {
-  SPI.begin(sck, miso, mosi, cs);
-  if (!SD.begin(cs)) {
-    Serial.println("SD Card Mount Failed");
-    return;
-  }
-  Serial.println("SD Card Mount Succeeded");
-
-  // Ensure parking_data folder exists
-  if (!SD.exists(parking_data_folder)) {
-    Serial.printf("Folder %s does not exist. Creating...\n", parking_data_folder);
-    if (SD.mkdir(parking_data_folder)) {
-      Serial.println("Folder created successfully.");
-    } else {
-      Serial.println("Failed to create folder.");
-    }
-  } else {
-    Serial.printf("Folder %s already exists.\n", parking_data_folder);
-  }
-  
-  // Ensure light_data folder exists
-  if (!SD.exists(light_data_folder)) {
-    Serial.printf("Folder %s does not exist. Creating...\n", light_data_folder);
-    if (SD.mkdir(light_data_folder)) {
-      Serial.println("Folder created successfully.");
-    } else {
-      Serial.println("Failed to create folder.");
-    }
-  } else {
-    Serial.printf("Folder %s already exists.\n", light_data_folder);
-  }
-}
-
-void logEvent(int value) {
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to get time");
-    return;  //TODO: enregistrer autre chose au lieu
-  }
-
-  // Create filename: /YYYY-MM-DD.csv
-  char filename[40];      // File path string
-  strftime(datestr, sizeof(datestr), "%Y-%m-%d", &timeinfo);
-  snprintf(filename, sizeof(filename), "%s/%s.csv", parking_data_folder, datestr);
-  Serial.print("Creating/using file: ");
-  Serial.println(filename);
-
-  // Create header if file doesn't exist
-  if (!SD.exists(filename)) {
-    writeFile(SD, filename, "index,date,time,distance(cm),millis,notification\n"); // CSV header
-  }
-
-  // Create data line: value,HH:MM:SS\n
-  char line[64];
-  strftime(timestr, sizeof(timestr), "%H:%M:%S", &timeinfo);
-  snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,%d\n", value, datestr, timestr, cm, lastEventTime, notificationsEnabled);
-
-  // Append to file
-  appendFile(SD, filename, line);
-
-  // Print to Serial
-  Serial.print("Logged: ");
-  Serial.print(line);
-}
-
-void logLightValue(int value, bool from_command) {
-  if (!getLocalTime(&timeinfo)) {
-    Serial.println("Failed to get time");
-    return;  //TODO: enregistrer autre chose au lieu
-  }
-
-  // Create filename: /YYYY-MM-DD.csv
-  char filename[40];      // File path string
-  strftime(dateDatastr, sizeof(dateDatastr), "%Y-%m-%d", &timeinfo);
-  snprintf(filename, sizeof(filename), "%s/%s.csv", light_data_folder, dateDatastr);
-  Serial.print("Creating/using file: ");
-  Serial.println(filename);
-
-  // Create header if file doesn't exist
-  if (!SD.exists(filename)) {
-    writeFile(SD, filename, "index,date,time,light,millis,command\n"); // CSV header
-  }
-
-  // Create data line
-  char line[64];
-  strftime(timeDatastr, sizeof(timeDatastr), "%H:%M:%S", &timeinfo);
-  snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,%d\n", value, dateDatastr, timeDatastr, lightValue, lastLogTime, from_command);
-
-  // Append to file
-  appendFile(SD, filename, line);
-
-  // Print to Serial
-  Serial.print("Logged: ");
-  Serial.print(line);
 }
 
 void listDir(fs::FS &fs, const char *dirname, uint8_t levels) {
@@ -370,6 +254,109 @@ void testFileIO(fs::FS &fs, const char *path) {
   file.close();
 }
 
+void measureData(int log_counter, bool from_command) {
+  lightValue = analogRead(ldrPin); // Range: 0 (dark) to 1023 (bright)
+  Serial.print("Light level: ");
+  Serial.println(lightValue);
+  logLightValue(log_counter, from_command);
+}
+
+void connectSDCardModule() {
+  SPI.begin(sck, miso, mosi, cs);
+  if (!SD.begin(cs)) {
+    Serial.println("SD Card Mount Failed");
+    return;
+  }
+  Serial.println("SD Card Mount Succeeded");
+
+  // Ensure parking_data folder exists
+  if (!SD.exists(parking_data_folder)) {
+    Serial.printf("Folder %s does not exist. Creating...\n", parking_data_folder);
+    if (SD.mkdir(parking_data_folder)) {
+      Serial.println("Folder created successfully.");
+    } else {
+      Serial.println("Failed to create folder.");
+    }
+  } else {
+    Serial.printf("Folder %s already exists.\n", parking_data_folder);
+  }
+  
+  // Ensure light_data folder exists
+  if (!SD.exists(light_data_folder)) {
+    Serial.printf("Folder %s does not exist. Creating...\n", light_data_folder);
+    if (SD.mkdir(light_data_folder)) {
+      Serial.println("Folder created successfully.");
+    } else {
+      Serial.println("Failed to create folder.");
+    }
+  } else {
+    Serial.printf("Folder %s already exists.\n", light_data_folder);
+  }
+}
+
+void logEvent(int value) {
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to get time");
+    return;  //TODO: enregistrer autre chose au lieu
+  }
+
+  // Create filename: /YYYY-MM-DD.csv
+  char filename[40];      // File path string
+  strftime(datestr, sizeof(datestr), "%Y-%m-%d", &timeinfo);
+  snprintf(filename, sizeof(filename), "%s/%s.csv", parking_data_folder, datestr);
+  Serial.print("Creating/using file: ");
+  Serial.println(filename);
+
+  // Create header if file doesn't exist
+  if (!SD.exists(filename)) {
+    writeFile(SD, filename, "index,date,time,distance(cm),millis,notification\n"); // CSV header
+  }
+
+  // Create data line: value,HH:MM:SS\n
+  char line[64];
+  strftime(timestr, sizeof(timestr), "%H:%M:%S", &timeinfo);
+  snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,%d\n", value, datestr, timestr, cm, lastEventTime, notificationsEnabled);
+
+  // Append to file
+  appendFile(SD, filename, line);
+
+  // Print to Serial
+  Serial.print("Logged: ");
+  Serial.print(line);
+}
+
+void logLightValue(int value, bool from_command) {
+  if (!getLocalTime(&timeinfo)) {
+    Serial.println("Failed to get time");
+    return;  //TODO: enregistrer autre chose au lieu
+  }
+
+  // Create filename: /YYYY-MM-DD.csv
+  char filename[40];      // File path string
+  strftime(dateDatastr, sizeof(dateDatastr), "%Y-%m-%d", &timeinfo);
+  snprintf(filename, sizeof(filename), "%s/%s.csv", light_data_folder, dateDatastr);
+  Serial.print("Creating/using file: ");
+  Serial.println(filename);
+
+  // Create header if file doesn't exist
+  if (!SD.exists(filename)) {
+    writeFile(SD, filename, "index,date,time,light,millis,command\n"); // CSV header
+  }
+
+  // Create data line
+  char line[64];
+  strftime(timeDatastr, sizeof(timeDatastr), "%H:%M:%S", &timeinfo);
+  snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,%d\n", value, dateDatastr, timeDatastr, lightValue, lastLogTime, from_command);
+
+  // Append to file
+  appendFile(SD, filename, line);
+
+  // Print to Serial
+  Serial.print("Logged: ");
+  Serial.print(line);
+}
+
+
 void setup() {
   // Manual display initialization for clone board
   pinMode(21, OUTPUT);           // Display power
@@ -446,8 +433,6 @@ void setup() {
   measureData(log_counter++, false);
   
   Serial.println("Patrol Mode Initiated...");
-
-  delay(2000);
 }
 
 void loop() {
@@ -547,54 +532,6 @@ void loop() {
     display.display();
   }
 
-  // unsigned long currentMillis = millis();
-  // // put your main code here, to run repeatedly:
-  // digitalWrite(trigPin, LOW);
-  // delayMicroseconds(2);
-  // digitalWrite(trigPin, HIGH);
-  // delayMicroseconds(5);
-  // digitalWrite(trigPin, LOW);
-
-  // pinMode(echoPin, INPUT);
-  // duration = pulseIn(echoPin, HIGH);
-
-  // inches = (duration / 2) / 74;
-  // cm = (duration / 2) / 29;
-  // Serial.println(cm);
-
-  // // Detection logic
-  // // if (inches < 10 && inches > 0) {
-  // //   // Car detected
-  // //   if (!carPresent) {
-  // //     Serial.println("Car entered.");
-  // //     carPresent = true;
-  // //   }
-  // // } else if (inches > 0) {
-  // //   // Car not detected
-  // //   if (carPresent) {
-  // //     Serial.println("Car left.");
-  // //     if (notificationsEnabled) {
-  // //       bot.sendMessage(Mychat_id, "Une auto a traversé!", "Markdown");
-  // //     }
-  // //     logEvent(event_counter++);
-  // //     carPresent = false;
-  // //   }
-  // // }
-  // if (cm < 30 && cm > 0  && currentMillis - lastEventTime > timerDelay) {
-  //     if (notificationsEnabled) {
-  //       bot.sendMessage(Mychat_id, "Une auto a traversé!", "Markdown");
-  //     }
-  //     logEvent(event_counter++);
-  //     lastEventTime = currentMillis;
-  // }
-
-  // // Measure data
-  // if (currentMillis - lastLogTime >= logInterval) {
-  //   lastLogTime = currentMillis;
-  //   measureData(log_counter++, false);
-  // }
-
-  // if (currentMillis - bot_lasttime > BOT_MTBS) {
   //   int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
   //   while (numNewMessages) {
   //     Serial.println("got response");
@@ -603,4 +540,39 @@ void loop() {
   //   }
   //   bot_lasttime = currentMillis;
   // }
+  unsigned long currentMillis = millis();
+  // put your main code here, to run repeatedly:
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(5);
+  digitalWrite(trigPin, LOW);
+
+  pinMode(echoPin, INPUT);
+  duration = pulseIn(echoPin, HIGH);
+
+  inches = (duration / 2) / 74;
+  cm = (duration / 2) / 29;
+  Serial.println(cm);
+
+  if (cm < 30 && cm > 0  && currentMillis - lastEventTime > timerDelay) {
+    if (notificationsEnabled) {
+      String data = createDataPacket();
+      Serial.printf("TX [%s] ", data.c_str());
+      tx_time = millis();
+      int state = radio.transmit(data.c_str());
+      tx_time = millis() - tx_time;
+    }
+    
+
+    logEvent(event_counter++);
+    lastEventTime = currentMillis;
+  }
+
+  // Measure data
+  if (currentMillis - lastLogTime >= logInterval) {
+    lastLogTime = currentMillis;
+    measureData(log_counter++, false);
+  }
+    
 }

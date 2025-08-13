@@ -32,6 +32,22 @@ uint64_t last_packet_time = 0;
 float last_rssi = 0;
 float last_snr = 0;
 
+// WiFi
+#define WIFI_SSID "SM-S921W6681"
+#define WIFI_PASS "qwer1234"
+
+// Telegram bot
+#define BOTtoken "8069531606:AAGbX_1IGLndlqWLSrzhMnUugFq2B06N8nw" // your Bot Token (Get from Botfather)
+String Mychat_id = "7727548064";
+String bot_name = "AuxVoletsNoirs_notifications"; // you can change this to whichever is your bot name
+
+WiFiClientSecure secured_client;
+UniversalTelegramBot bot(BOTtoken, secured_client);
+
+const unsigned long BOT_MTBS = 1000; // mean time between scan messages
+unsigned long bot_lasttime; // last time messages' scan has been done
+bool notificationsEnabled = true;
+
 // Can't do Serial or display operations in interrupt, just set flag
 void rx() {
   rxFlag = true;
@@ -328,6 +344,10 @@ void loop() {
       
       // Parse JSON data if applicable
       parseReceivedData(rxdata);
+
+      if (notificationsEnabled) {
+        bot.sendMessage(Mychat_id, "Une auto a traversé!", "Markdown");
+      }
       
     } else {
       // Reception failed
@@ -371,5 +391,16 @@ void loop() {
   if (button.isSingleClick()) {
     showDetailedStats();
   }
+
+  // handle Telegram messages
+  if (currentMillis - bot_lasttime > BOT_MTBS) {
+      int numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+      while (numNewMessages) {
+        Serial.println("got response");
+        handleNewMessages(numNewMessages);
+        numNewMessages = bot.getUpdates(bot.last_message_received + 1);
+      }
+      bot_lasttime = currentMillis;
+    }
 }
 
