@@ -21,9 +21,9 @@
 // Pin Definitions
 int trigPin = 2;
 int echoPin = 4;
-int sck = 18;
-int miso = 19;
-int mosi = 23;
+int sck = 45;
+int miso = 42;
+int mosi = 32;
 int cs = 5;
 const int ldrPin = 33;
 
