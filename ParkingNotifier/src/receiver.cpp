@@ -59,8 +59,10 @@ float last_rssi = 0;
 float last_snr = 0;
 
 // WiFi and Telegram
-const char* WIFI_SSID = "SM-S921W6681";
-const char* WIFI_PASS = "qwer1234";
+const char* WIFI_SSID = "genois";
+// const char* WIFI_SSID = "SM-S921W6681";
+const char* WIFI_PASS = "master13";
+// const char* WIFI_PASS = "qwer1234";
 const char* BOTtoken = "8069531606:AAGbX_1IGLndlqWLSrzhMnUugFq2B06N8nw";
 String Mychat_id = "7727548064";
 String bot_name = "AuxVoletsNoirs_notifications";
@@ -104,9 +106,45 @@ void startReceiving() {
     RADIOLIB_OR_HALT(radio.startReceive(RADIOLIB_SX126X_RX_TIMEOUT_INF));
 }
 
+void sendTimeSyncResponse() {
+    // Get current time
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("Failed to get time for sync response");
+        return;
+    }
+    
+    // Format time as string
+    char timeStr[32];
+    strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    
+    // Create time sync packet
+    String timeSyncPacket = "{\"type\":\"time_sync\",\"time\":\"" + String(timeStr) + "," + String(millis()) + "\"}";
+    
+    Serial.printf("Sending time sync: %s\n", timeSyncPacket.c_str());
+    
+    // Transmit the time sync response
+    int state = radio.transmit(timeSyncPacket.c_str());
+    if (state == RADIOLIB_ERR_NONE) {
+        Serial.println("Time sync response sent successfully");
+    } else {
+        Serial.printf("Time sync response failed, code %d\n", state);
+    }
+    
+    // Resume receiving
+    startReceiving();
+}
+
 void parseReceivedData(String data) {
     // Try to parse JSON-formatted data
     if (data.startsWith("{") && data.endsWith("}")) {
+        
+        // Check if this is a time sync request
+        if (data.indexOf("\"type\":\"time_request\"") != -1) {
+            Serial.println("--- Time Sync Request Received ---");
+            sendTimeSyncResponse();
+            return;
+        }
+        
         Serial.println("--- Parsed JSON Data ---");
         
         // Simple JSON parsing
@@ -380,6 +418,9 @@ void setup() {
     // Connect to WiFi and Telegram
     connectwifi();
     connectTelegramBot();
+
+    // Initialize time (local only - no NTP for transmitter)
+    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     
     Serial.println("LoRa Receiver - Setup complete. Listening for packets...");
 }
