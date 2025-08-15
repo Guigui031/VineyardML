@@ -20,12 +20,15 @@
 
 // Pin Definitions
 int trigPin = 2;
-int echoPin = 4;
-int sck = 45;
-int miso = 42;
-int mosi = 32;
-int cs = 5;
-const int ldrPin = 33;
+int echoPin = 3;
+int sck = 5;
+int miso = 6;
+int mosi = 4;
+int cs = 7;
+const int ldrPin = 19;
+
+// Create separate SPI instance for SD card using HSPI with different bus
+SPIClass sdSPI(HSPI);
 
 // Global Variables
 long counter = 0;
@@ -254,8 +257,9 @@ bool checkCarDetection() {
 
 // ===== SD CARD FUNCTIONS =====
 void connectSDCardModule() {
-    SPI.begin(sck, miso, mosi, cs);
-    if (!SD.begin(cs)) {
+    // Initialize separate SPI instance with custom pins for SD card
+    sdSPI.begin(sck, miso, mosi, cs);
+    if (!SD.begin(cs, sdSPI)) {
         Serial.println("SD Card Mount Failed");
         return;
     }
@@ -319,27 +323,39 @@ void appendFile(fs::FS &fs, const char *path, const char *message) {
 }
 
 void logEvent(int value) {
-    if (!getLocalTime(&timeinfo)) {
-        Serial.println("Failed to get time");
-        return;
-    }
-
-    // Create filename: /YYYY-MM-DD.csv
     char filename[40];
-    strftime(datestr, sizeof(datestr), "%Y-%m-%d", &timeinfo);
-    snprintf(filename, sizeof(filename), "%s/%s.csv", parking_data_folder, datestr);
+    char line[64];
+    
+    if (!getLocalTime(&timeinfo)) {
+        Serial.println("Failed to get time - using null values");
+        
+        // Use default filename when time is not available
+        snprintf(filename, sizeof(filename), "%s/no_time.csv", parking_data_folder);
+        
+        // Create header if file doesn't exist
+        if (!SD.exists(filename)) {
+            writeFile(SD, filename, "index,date,time,distance(cm),millis,notification\n");
+        }
+        
+        // Create data line with null time values
+        snprintf(line, sizeof(line), "%d,NULL,NULL,%d,%d,1\n", value, cm, lastEventTime);
+    } else {
+        // Create filename: /YYYY-MM-DD.csv
+        strftime(datestr, sizeof(datestr), "%Y-%m-%d", &timeinfo);
+        snprintf(filename, sizeof(filename), "%s/%s.csv", parking_data_folder, datestr);
+        
+        // Create header if file doesn't exist
+        if (!SD.exists(filename)) {
+            writeFile(SD, filename, "index,date,time,distance(cm),millis,notification\n");
+        }
+        
+        // Create data line with actual time values
+        strftime(timestr, sizeof(timestr), "%H:%M:%S", &timeinfo);
+        snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,1\n", value, datestr, timestr, cm, lastEventTime);
+    }
+    
     Serial.print("Creating/using file: ");
     Serial.println(filename);
-
-    // Create header if file doesn't exist
-    if (!SD.exists(filename)) {
-        writeFile(SD, filename, "index,date,time,distance(cm),millis,notification\n");
-    }
-
-    // Create data line
-    char line[64];
-    strftime(timestr, sizeof(timestr), "%H:%M:%S", &timeinfo);
-    snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,1\n", value, datestr, timestr, cm, lastEventTime);
 
     // Append to file
     appendFile(SD, filename, line);
@@ -350,27 +366,39 @@ void logEvent(int value) {
 }
 
 void logLightValue(int value, bool from_command) {
+    char filename[40];
+    char line[64];
+    
     if (!getLocalTime(&timeinfo)) {
-        Serial.println("Failed to get time");
-        return;
+        Serial.println("Failed to get time - using null values");
+        
+        // Use default filename when time is not available
+        snprintf(filename, sizeof(filename), "%s/no_time.csv", light_data_folder);
+        
+        // Create header if file doesn't exist
+        if (!SD.exists(filename)) {
+            writeFile(SD, filename, "index,date,time,light,millis,command\n");
+        }
+        
+        // Create data line with null time values
+        snprintf(line, sizeof(line), "%d,NULL,NULL,%d,%d,%d\n", value, lightValue, lastLogTime, from_command);
+    } else {
+        // Create filename: /YYYY-MM-DD.csv
+        strftime(dateDatastr, sizeof(dateDatastr), "%Y-%m-%d", &timeinfo);
+        snprintf(filename, sizeof(filename), "%s/%s.csv", light_data_folder, dateDatastr);
+        
+        // Create header if file doesn't exist
+        if (!SD.exists(filename)) {
+            writeFile(SD, filename, "index,date,time,light,millis,command\n");
+        }
+        
+        // Create data line with actual time values
+        strftime(timeDatastr, sizeof(timeDatastr), "%H:%M:%S", &timeinfo);
+        snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,%d\n", value, dateDatastr, timeDatastr, lightValue, lastLogTime, from_command);
     }
 
-    // Create filename: /YYYY-MM-DD.csv
-    char filename[40];
-    strftime(dateDatastr, sizeof(dateDatastr), "%Y-%m-%d", &timeinfo);
-    snprintf(filename, sizeof(filename), "%s/%s.csv", light_data_folder, dateDatastr);
     Serial.print("Creating/using file: ");
     Serial.println(filename);
-
-    // Create header if file doesn't exist
-    if (!SD.exists(filename)) {
-        writeFile(SD, filename, "index,date,time,light,millis,command\n");
-    }
-
-    // Create data line
-    char line[64];
-    strftime(timeDatastr, sizeof(timeDatastr), "%H:%M:%S", &timeinfo);
-    snprintf(line, sizeof(line), "%d,%s,%s,%d,%d,%d\n", value, dateDatastr, timeDatastr, lightValue, lastLogTime, from_command);
 
     // Append to file
     appendFile(SD, filename, line);
@@ -413,17 +441,17 @@ void setup() {
     initSensors();
     
     // Initialize SD card
-    connectSDCardModule();
+    connectSDCardModule(); // Temporarily disabled
     
-    // Initialize time
-    configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+    // Initialize time (local only - no NTP for transmitter)
+    // configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
     
     // Show setup complete on display
     displayTransmitterInfo();
     
     // Initial sensor readings
     lastLogTime = millis();
-    measureData(log_counter++, false);
+    measureData(log_counter++, false); // Disabled - SD logging
     
     Serial.println("LoRa Transmitter - Patrol Mode Initiated...");
 }
@@ -446,7 +474,7 @@ void loop() {
         }
         
         // Log the event
-        logEvent(event_counter++);
+        logEvent(event_counter++); // Disabled - SD logging
         counter++;
     }
     
@@ -469,7 +497,7 @@ void loop() {
     // Periodic light measurement logging
     if (currentMillis - lastLogTime >= logInterval) {
         lastLogTime = currentMillis;
-        measureData(log_counter++, false);
+        measureData(log_counter++, false); // Disabled - SD logging
     }
     
     // Update display status periodically

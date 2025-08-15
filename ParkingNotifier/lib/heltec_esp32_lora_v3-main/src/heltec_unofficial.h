@@ -395,7 +395,7 @@ void heltec_display_power(bool on) {
  * initializes the Heltec library by setting up serial port and display.
  */
 void heltec_setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
   #ifndef ARDUINO_heltec_wifi_32_lora_V3
     hspi->begin(SCK, MISO, MOSI, SS);
   #endif
