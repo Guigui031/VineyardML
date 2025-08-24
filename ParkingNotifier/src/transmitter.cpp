@@ -38,10 +38,11 @@ uint64_t minimum_pause = 0;
 
 // Distance sensor variables
 long duration = 0;
+const int max_distance = 500; // cm, maximum distance to consider car present
 long cm = 0;
 long inches = 0;
 long lastEventTime = 0;
-long timerDelay = 30 * 1000; // 30 seconds cooldown to prevent double notifications
+long timerDelay = 15 * 1000; // 15 seconds cooldown to prevent double notifications
 bool carPresent = false;
 int consecutiveDetections = 0;
 const int requiredDetections = 1; // Require 1 consecutive readings under threshold
@@ -346,7 +347,7 @@ bool checkCarDetection() {
     }
     
     // Check if current reading indicates car presence (distance < 30cm and > 0cm for valid reading)
-    bool currentReading = (cm < 30 && cm > 0);
+    bool currentReading = (cm < max_distance && cm > 0);
     
     if (currentReading) {
         consecutiveDetections++;

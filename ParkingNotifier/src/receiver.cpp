@@ -59,10 +59,10 @@ float last_rssi = 0;
 float last_snr = 0;
 
 // WiFi and Telegram
-const char* WIFI_SSID = "genois";
-// const char* WIFI_SSID = "SM-S921W6681";
-const char* WIFI_PASS = "master13";
-// const char* WIFI_PASS = "qwer1234";
+// const char* WIFI_SSID = "genois";
+const char* WIFI_SSID = "SM-S921W6681";
+// const char* WIFI_PASS = "master13";
+const char* WIFI_PASS = "qwer1234";
 const char* BOTtoken = "8069531606:AAGbX_1IGLndlqWLSrzhMnUugFq2B06N8nw";
 String Mychat_id = "7727548064";
 String bot_name = "AuxVoletsNoirs_notifications";
